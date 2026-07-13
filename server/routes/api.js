@@ -35,7 +35,11 @@ router.post('/upload', upload.single('file'), async (req, res) => {
         const { uid } = req.body; // User ID from frontend
         
         // 1. Send file to Python AI Service
-        const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://127.0.0.1:5001/analyze';
+        let aiServiceUrl = process.env.AI_SERVICE_URL || 'http://127.0.0.1:5001/analyze';
+        // Auto-append '/analyze' path if it is omitted in the environment variable
+        if (process.env.AI_SERVICE_URL && !aiServiceUrl.endsWith('/analyze')) {
+            aiServiceUrl = aiServiceUrl.replace(/\/$/, '') + '/analyze';
+        }
         
         const formData = new FormData();
         formData.append('file', fs.createReadStream(req.file.path), { filename: req.file.originalname, contentType: req.file.mimetype });
