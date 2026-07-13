@@ -1,0 +1,23 @@
+# Node
+node_modules/
+.npm
+npm-debug.log*
+
+# Mac
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+
+# Firebase Config (KEEP THIS OUT OF GITHUB)
+firebase-service-account.json
+config/firebase-service-account.json
+server/config/firebase-service-account.json
+
+# Local Vite/React
+.vite/
+client/dist/
