@@ -52,6 +52,6 @@ This is a hosting limitation rather than an application bug.
 - Higher-memory AI deployment
 ## Screenshots
 
-<img src="images/screenshot.png" alt="Screenshot" width="500">
-<img src="images/screenshot.png" alt="Screenshot" width="500">
-<img src="images/screenshot.png" alt="Screenshot" width="500">
+<img src="https://github.com/vaishnav-ce/DeepThink--AI/blob/main/Screenshot%202026-07-15%20230329.png?raw=true" alt="Screenshot" width="500">
+<img src="https://github.com/vaishnav-ce/DeepThink--AI/blob/main/Screenshot%202026-07-15%20230350.png?raw=true" alt="Screenshot" width="500">
+<img src="https://github.com/vaishnav-ce/DeepThink--AI/blob/main/Screenshot%202026-07-15%20230420.png?raw=true" alt="Screenshot" width="500">
