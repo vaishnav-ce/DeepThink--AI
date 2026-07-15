@@ -1,58 +1,165 @@
-# 👁️ DEEPTHINK
+# 👁️ DeepThink AI
 
-> "DEEPTHINK: A Multi-Modal Forensic Engine for the Detection of Generative Media."
+> **DeepThink** is a multi-modal forensic engine for detecting AI-generated media.
 
-DeepThink is an advanced, production-ready full-stack detection system built to identify AI-generated media (Deepfakes) across multiple modalities: **Images**, **Video**, and **Audio**. An AI-powered web application that analyzes uploaded images and predicts whether they are AI-generated or authentic.
+DeepThink is a full-stack web application that analyzes uploaded **images**, **videos**, and **audio** and predicts whether media is likely authentic or AI-generated.
 
-<a href="https://deep-think-ai-six.vercel.app/">Visit Site (Due to RENDER FREE TIER RAM issue upload, ai services may not work properly)</a>
+🔗 **Live demo:** https://deep-think-ai-six.vercel.app/
 
-## 🧠 Core Features
+> Note: The public AI service can be unstable on free-tier Render due to memory limits.
 
-1. **Multi-Modal Uploads**: 
-   Inspect media formats ranging from `jpg`, `png` to `mp4` and `wav`/`mp3`.
-   
-2. **Real-time Technical Analysis**: 
-   Leveraging a lightweight Python heuristic model (Laplacian variance, edge analysis, noise mapping), the system yields confidence scores immediately. 
-   
-3. **Interactive "Binary Pupil" UI**: 
-   A sleek, neon-clad forensic terminal interface. While scanning, the AI's "pupil" surveys the file using a cyan laser. Passing results turn it Authentic Green, while detecting generative artifacts causes it to violently glitch Red.
+---
 
-4. **Forensic "Manipulation Heatmap"**: 
-   For images, the system automatically runs an anomaly isolation pass across the noise domain, highlighting potential artifact borders directly under the technical analysis results. 
-   
-5. **Report Generation**: 
-   Single-click PDF download capabilities capturing all metadata, confidence scores, reasons, and heatmaps for professional record-keeping. 
+## ✨ Features
 
-6. **Cloud Scan History (Firestore, Future Update)**: 
-   Automatically ties historical uploads and their verdicts back to user accounts using Firebase Authentication and Firestore Database integration.
+- Multi-modal upload support (`jpg`, `png`, `webp`, `mp4`, `avi`, `mov`, `wav`, `mp3`)
+- Real-time forensic analysis with confidence scores
+- Interactive “Binary Pupil” scanning UI
+- Image manipulation heatmap overlay
+- PDF report export
+- Optional upload history integration with Firebase/Firestore
 
-## ⚙️ Tech Stack
+---
 
-- **Frontend**: React.js, Tailwind CSS, Vite, Framer Motion, HTML2Canvas, jsPDF
-- **Backend**: Node.js, Express, Axios, Firebase Admin( Future Update)
-- **AI Service**: Python, Flask, OpenCV, NumPy, Hugging Face Transformers
-- **Auth & Database**: Google Firebase (Firestore + Auth)[ FUTURE UPGRADE]
-## Architecture
+## 🧱 Tech Stack
 
-Frontend(Vercel)
+- **Frontend:** React, Vite, Tailwind CSS, Framer Motion
+- **Backend:** Node.js, Express, Multer, Axios
+- **AI Service:** Python, Flask, OpenCV, NumPy, Torch, Transformers, Librosa
+- **Auth/DB (optional):** Firebase Auth + Firestore
+
+---
+
+## 🏗️ Architecture
+
+Frontend (Vercel)
 ↓
-Node Backend(Render)
+Node.js API (Render/local)
 ↓
-Python AI Service(Render)
+Python AI Service (Render/local)
 
-##  Current Status
-The frontend and backend are fully deployed.
-The AI service works locally. Public deployment of the transformer model requires more memory than Render's free tier provides.
-This is a hosting limitation rather than an application bug.
-## 🚀Future Improvements
+---
 
-- Video detection
-- Audio detection
-- Smaller inference model
-- Higher-memory AI deployment
-## Screenshots
-<img src="https://github.com/vaishnav-ce/DeepThink--AI/blob/main/Screenshot%202026-07-15%20230329.png?raw=true" alt="Screenshot" width="500">
+## 📁 Repository Structure
+
+- `/client` — React frontend
+- `/server` — Express API + upload/history routes
+- `/ai-service` — Flask AI inference service
+
+---
+
+## 🚀 Quick Start (Local)
+
+### 1) Prerequisites
+
+- Node.js 18+
+- npm
+- Python 3.10+
+- pip
+
+### 2) Clone and install
+
+```bash
+git clone https://github.com/vaishnav-ce/DeepThink--AI.git
+cd DeepThink--AI
+
+cd client && npm install
+cd ../server && npm install
+cd ../ai-service && pip install -r requirements.txt
+```
+
+### 3) Environment setup
+
+Create environment files:
+
+- `/client/.env`
+- `/server/.env`
+
+Client (`/client/.env`) example:
+
+```env
+VITE_API_URL=http://localhost:5005/api
+VITE_FIREBASE_API_KEY=your_key
+VITE_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+VITE_FIREBASE_DATABASE_URL=your_database_url
+VITE_FIREBASE_PROJECT_ID=your_project_id
+VITE_FIREBASE_STORAGE_BUCKET=your_bucket
+VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+VITE_FIREBASE_APP_ID=your_app_id
+VITE_FIREBASE_MEASUREMENT_ID=your_measurement_id
+```
+
+Server (`/server/.env`) minimal example:
+
+```env
+PORT=5005
+AI_SERVICE_URL=http://127.0.0.1:5001/analyze
+
+# Optional Firebase Admin configuration
+FIREBASE_PROJECT_ID=
+FIREBASE_CLIENT_EMAIL=
+FIREBASE_PRIVATE_KEY=
+# OR
+FIREBASE_SERVICE_ACCOUNT_PATH=
+```
+
+### 4) Run services
+
+Run each service in a separate terminal:
+
+```bash
+# Terminal 1
+cd ai-service
+python app.py
+
+# Terminal 2
+cd server
+npm start
+
+# Terminal 3
+cd client
+npm run dev
+```
+
+Frontend default URL: `http://localhost:5173`
+
+---
+
+## 🔌 API Endpoints
+
+### Backend (`/server`)
+
+- `GET /` — health check
+- `POST /api/upload` — upload file for AI analysis
+- `GET /api/history/:uid` — fetch user upload history
+
+### AI Service (`/ai-service`)
+
+- `GET /` — service status
+- `POST /analyze` — analyze uploaded media file
+
+---
+
+## 🛠️ Troubleshooting
+
+- **AI service fails on Render free tier:** model memory usage can exceed free limits.
+- **Slow first request:** model warm-up may take time.
+- **No Firestore history:** set Firebase Admin environment variables in `/server/.env`.
+
+---
+
+## 🗺️ Roadmap
+
+- Improve production deployment for heavier models
+- Expand and tune video/audio detection accuracy
+- Optimize model size and startup latency
+
+---
+
+## 📸 Screenshots
+
+<img src="https://github.com/vaishnav-ce/DeepThink--AI/blob/main/Screenshot%202026-07-15%20230329.png?raw=true" alt="Screenshot 1" width="500">
 <br>
-<img src="https://github.com/vaishnav-ce/DeepThink--AI/blob/main/Screenshot%202026-07-15%20230350.png?raw=true" alt="Screenshot" width="500">
+<img src="https://github.com/vaishnav-ce/DeepThink--AI/blob/main/Screenshot%202026-07-15%20230350.png?raw=true" alt="Screenshot 2" width="500">
 <br>
-<img src="https://github.com/vaishnav-ce/DeepThink--AI/blob/main/Screenshot%202026-07-15%20230420.png?raw=true" alt="Screenshot" width="500">
+<img src="https://github.com/vaishnav-ce/DeepThink--AI/blob/main/Screenshot%202026-07-15%20230420.png?raw=true" alt="Screenshot 3" width="500">
