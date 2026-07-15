@@ -4,7 +4,7 @@
 
 DeepThink is an advanced, production-ready full-stack detection system built to identify AI-generated media (Deepfakes) across multiple modalities: **Images**, **Video**, and **Audio**. An AI-powered web application that analyzes uploaded images and predicts whether they are AI-generated or authentic.
 
-![DeepThink Dashboard](./assets/dashboard-preview.png)
+![DeepThink Dashboard]([./assets/dashboard-preview.png](https://deep-think-ai-six.vercel.app/))
 
 ## 🧠 Core Features
 
