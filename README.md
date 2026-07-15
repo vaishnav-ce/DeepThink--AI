@@ -43,8 +43,3 @@ This is a hosting limitation rather than an application bug.
 - Audio detection
 - Smaller inference model
 - Higher-memory AI deployment
-npm run dev
-```
-*(Runs on Port 5173)*
-
-Open `http://localhost:5173` in your browser. Upload, intercept, and detect generative media.
