@@ -23,7 +23,7 @@ DeepThink is an advanced, production-ready full-stack detection system built to 
 5. **Report Generation**: 
    Single-click PDF download capabilities capturing all metadata, confidence scores, reasons, and heatmaps for professional record-keeping. 
 
-6. **Cloud Scan History (Firestore)**: 
+6. **Cloud Scan History (Firestore, Future Update)**: 
    Automatically ties historical uploads and their verdicts back to user accounts using Firebase Authentication and Firestore Database integration.
 
 ## ⚙️ Tech Stack
