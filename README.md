@@ -37,38 +37,12 @@ DeepThink is an advanced, production-ready full-stack detection system built to 
 The frontend and backend are fully deployed.
 The AI service works locally. Public deployment of the transformer model requires more memory than Render's free tier provides.
 This is a hosting limitation rather than an application bug.
-## 🚀 Quick Start
+## 🚀Future Improvements
 
-Ensure you have Node.js and Python installed.
-
-**1. Clone the repository**
-```bash
-git clone https://github.com/yourusername/deepthink.git
-cd deepthink
-```
-
-**2. Start the Python AI Service**
-```bash
-cd ai-service
-python3 -m venv venv
-source venv/bin/activate
-pip install flask flask-cors werkzeug opencv-python numpy
-python app.py
-```
-*(Runs on Port 5001)*
-
-**3. Start the Node.js Node Server**
-```bash
-cd server
-npm install
-PORT=5005 node index.js
-```
-*(Runs on Port 5005 - ensure you have placed `firebase-service-account.json` inside the config folder!)*
-
-**4. Start the React UI**
-```bash
-cd client
-npm install
+- Video detection
+- Audio detection
+- Smaller inference model
+- Higher-memory AI deployment
 npm run dev
 ```
 *(Runs on Port 5173)*
