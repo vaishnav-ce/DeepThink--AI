@@ -51,7 +51,8 @@ This is a hosting limitation rather than an application bug.
 - Smaller inference model
 - Higher-memory AI deployment
 ## Screenshots
-
 <img src="https://github.com/vaishnav-ce/DeepThink--AI/blob/main/Screenshot%202026-07-15%20230329.png?raw=true" alt="Screenshot" width="500">
+<br>
 <img src="https://github.com/vaishnav-ce/DeepThink--AI/blob/main/Screenshot%202026-07-15%20230350.png?raw=true" alt="Screenshot" width="500">
+<br>
 <img src="https://github.com/vaishnav-ce/DeepThink--AI/blob/main/Screenshot%202026-07-15%20230420.png?raw=true" alt="Screenshot" width="500">
