@@ -50,14 +50,36 @@ router.post('/upload', upload.single('file'), async (req, res) => {
         // fallback to using FormData pipe if needed, or axios. 
         // We'll use axios to make it simpler and foolproof.
         const axios = require('axios');
+        const getAxiosConfig = (form) => ({
+            headers: form.getHeaders(),
+            timeout: 120000,
+            maxBodyLength: Infinity,
+            maxContentLength: Infinity,
+        });
+
         let aiResult = {};
         try {
-            const response = await axios.post(aiServiceUrl, formData, {
-                headers: formData.getHeaders()
-            });
+            let response;
+            try {
+                response = await axios.post(aiServiceUrl, formData, getAxiosConfig(formData));
+            } catch (initialError) {
+                const status = initialError.response?.status;
+                const code = initialError.code;
+                if ([502, 503].includes(status) || ['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT'].includes(code)) {
+                    await new Promise(resolve => setTimeout(resolve, 20000));
+                    const retryFormData = new FormData();
+                    retryFormData.append('file', fs.createReadStream(req.file.path), { filename: req.file.originalname, contentType: req.file.mimetype });
+                    response = await axios.post(aiServiceUrl, retryFormData, getAxiosConfig(retryFormData));
+                } else {
+                    throw initialError;
+                }
+            }
             aiResult = response.data;
         } catch (aiError) {
-            console.error('Error connecting to AI service:', aiError.message);
+            console.error("Status:", aiError.response?.status);
+            console.error("Response:", aiError.response?.data);
+            console.error("Code:", aiError.code);
+            console.error("Message:", aiError.message);
             // Delete temp file
             fs.unlinkSync(req.file.path);
             const rawErrorMsg = aiError.response?.data?.error || aiError.message;

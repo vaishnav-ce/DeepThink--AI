@@ -1,0 +1,13 @@
+Filename,GroundTruth,Prediction,Confidence,Status,Reason
+test_real_sample.jpg,Real,Real,0.589,PASS,STATUS: Likely Authentic Real Media. TECHNICAL DETAILS: ViT classifier — Real probability 58.9% | AI probability 41.1%.
+test_ai_sample.jpg,Deepfake,Real,0.9,FAIL,STATUS: Likely Authentic Real Media. TECHNICAL DETAILS: ViT classifier — Real probability 90.0% | AI probability 10.0%.
+
+METRIC,VALUE
+Accuracy,0.5000
+Precision,0.0000
+Recall,0.0000
+F1-Score,0.0000
+True Positives,0
+True Negatives,1
+False Positives,0
+False Negatives,1

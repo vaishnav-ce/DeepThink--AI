@@ -1,14 +1,21 @@
 import os
+import logging
 import cv2
 import numpy as np
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 import tempfile
-import wave
 import base64
 import io
+import torchaudio
+import librosa
 from PIL import Image
+import torch
+from transformers import pipeline as hf_pipeline
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 CORS(app)
@@ -16,6 +23,22 @@ CORS(app)
 app.config['UPLOAD_FOLDER'] = tempfile.gettempdir()
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'mp4', 'avi', 'mov', 'wav', 'mp3'}
+
+# ─── Image Model (loaded once at startup, never per-request) ─────────────────
+_IMAGE_PIPE = None
+
+def get_image_pipe():
+    global _IMAGE_PIPE
+    if _IMAGE_PIPE is None:
+        logger.info("Loading image classification model (umm-maybe/AI-image-detector)...")
+        _IMAGE_PIPE = hf_pipeline(
+            "image-classification",
+            model="umm-maybe/AI-image-detector",
+            device=-1,   # CPU — compatible with Render Free tier
+        )
+        logger.info("Image model loaded successfully.")
+    return _IMAGE_PIPE
+
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -97,126 +120,66 @@ def compute_channel_correlation(img):
     return avg_corr
 
 
-# ─── Main Image Analyser ──────────────────────────────────────────────────────
+# ─── Main Image Analyser ─────────────────────────────────────────────────────
 def analyze_image(filepath, original_filename=""):
-    img = cv2.imread(filepath)
-    if img is None:
-        raise Exception("Invalid image file")
+    """
+    Deep-learning image authenticity detector.
+    Uses a ViT (Vision Transformer) pretrained classifier fine-tuned on
+    real vs. AI-generated images (umm-maybe/AI-image-detector on Hugging Face).
+    Falls back gracefully to ELA heatmap for the visual report.
+    """
+    # ── ViT inference ────────────────────────────────────────────────────────
+    pipe = get_image_pipe()
+    try:
+        pil_img = Image.open(filepath).convert("RGB")
+    except Exception as exc:
+        raise Exception(f"Invalid or unreadable image file: {exc}")
 
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    with torch.no_grad():
+        outputs = pipe(pil_img)
 
-    # 1. Classic sharpness (Laplacian variance)
-    lap_var = cv2.Laplacian(gray, cv2.CV_64F).var()
+    scores     = {o["label"]: o["score"] for o in outputs}
+    # Model labels: "artificial" / "real"  (or "fake" / "human" in some forks)
+    ai_score   = scores.get("artificial", scores.get("fake",  0.0))
+    real_score = scores.get("real",       scores.get("human", 1.0 - ai_score))
+    is_fake    = ai_score >= 0.5
 
-    # 2. Error Level Analysis
-    ela_mean, ela_max, ela_std, ela_map = compute_ela(filepath)
+    confidence   = round(ai_score if is_fake else real_score, 3)
+    result_label = "Deepfake" if is_fake else "Real"
 
-    # 3. DCT high-frequency ratio
-    hf_ratio = compute_dct_score(gray)
-
-    # 4. Texture / sensor noise score
-    texture = compute_texture_score(gray)
-
-    # 5. Colour channel correlation
-    ch_corr = compute_channel_correlation(img)
-
-    # 6. Noise residual (classic)
-    median_blur = cv2.medianBlur(gray, 3)
-    noise_diff  = cv2.absdiff(gray, median_blur)
-    noise_mean  = np.mean(noise_diff)
-
-    # ── Scoring (weighted sum → 0 = definitely real, 1 = definitely fake) ──
-    score = 0.0
-    evidence = []
-
-    # ELA signal (most reliable)
-    if ela_mean is not None:
-        if ela_mean < 3.5:   # Suspiciously clean recompression → AI
-            score += 0.30
-            evidence.append(f"Very low ELA residual ({ela_mean:.2f}) — lacks authentic JPEG history")
-        elif ela_mean < 7.0:
-            score += 0.12
-            evidence.append(f"Low ELA residual ({ela_mean:.2f}) — mildly suspicious recompression")
-        else:
-            score -= 0.10
-            evidence.append(f"Natural ELA residual ({ela_mean:.2f}) — consistent with real photo")
-
-    # DCT signal
-    if hf_ratio < 0.30:      # Very little high-freq content → AI-smoothed
-        score += 0.22
-        evidence.append(f"Low DCT high-frequency ratio ({hf_ratio:.3f}) — synthetic smoothing detected")
-    elif hf_ratio < 0.50:
-        score += 0.08
-        evidence.append(f"Reduced high-frequency DCT energy ({hf_ratio:.3f})")
-    else:
-        score -= 0.08
-        evidence.append(f"Natural frequency profile (DCT HF ratio: {hf_ratio:.3f})")
-
-    # Texture noise
-    if texture < 3.5:
-        score += 0.18
-        evidence.append(f"Unnaturally smooth texture (score: {texture:.2f}) — typical of AI diffusion models")
-    elif texture < 7.0:
-        score += 0.06
-        evidence.append(f"Reduced sensor noise texture (score: {texture:.2f})")
-    else:
-        score -= 0.06
-        evidence.append(f"Natural camera sensor noise (texture: {texture:.2f})")
-
-    # Channel correlation
-    if ch_corr > 0.97:
-        score += 0.12
-        evidence.append(f"Abnormally high RGB correlation ({ch_corr:.3f}) — GAN colour artefact")
-    elif ch_corr > 0.93:
-        score += 0.04
-
-    # Classic noise residual
-    if noise_mean < 1.0:
-        score += 0.10
-        evidence.append(f"Near-zero sensor noise residual ({noise_mean:.3f})")
-    else:
-        score -= 0.06
-
-    # Classic Laplacian (low weight — modern AI is sharp)
-    if lap_var < 50:
-        score += 0.08
-        evidence.append(f"Very low edge variance (Laplacian: {lap_var:.1f}) — blurry / over-smooth")
-
-    # 7. Filename metadata boost (demo-proof)
-    fname_lower = original_filename.lower()
-    ai_keywords = ['ai', 'fake', 'midjourney', 'dalle', 'dall-e', 'stable', 'generated',
-                   'deepfake', 'synthetic', 'gan', 'diffusion', 'sora', 'runway', 'kling']
-    if any(kw in fname_lower for kw in ai_keywords):
-        score += 0.35
-        evidence.append("Metadata: AI-generation pipeline traces found in filename")
-
-    # ── Clamp & verdict ──
-    score = min(max(score, 0.0), 1.0)
-    result_label = "Deepfake" if score >= 0.42 else "Real"
-    confidence   = score if result_label == "Deepfake" else (1.0 - score)
-    confidence   = round(max(confidence, 0.52), 2)   # Always ≥ 52 % certain
-
-    reason_prefix = (
-        f"STATUS: Likely AI-Generated or Manipulated. "
-        if result_label == "Deepfake"
-        else "STATUS: Likely Authentic Real Media. "
+    reason = (
+        f"STATUS: Likely AI-Generated or Manipulated. TECHNICAL DETAILS: "
+        f"ViT classifier — AI probability {ai_score:.1%} | Real probability {real_score:.1%}."
+        if is_fake else
+        f"STATUS: Likely Authentic Real Media. TECHNICAL DETAILS: "
+        f"ViT classifier — Real probability {real_score:.1%} | AI probability {ai_score:.1%}."
     )
-    reason = reason_prefix + "TECHNICAL DETAILS: " + " | ".join(evidence[:3])
 
-    # ── Heatmap ──
-    if ela_map is not None:
+    logger.info("Image result: %s | confidence: %.3f", result_label, confidence)
+
+    # ── ELA heatmap (portfolio feature — preserved from original) ─────────────
+    img = cv2.imread(filepath)
+    ela_mean, _, _, ela_map = compute_ela(filepath)
+
+    if img is not None and ela_map is not None:
         ela_vis = ela_map.mean(axis=2) if ela_map.ndim == 3 else ela_map
         norm    = cv2.normalize(ela_vis.astype(np.float32), None, 0, 255, cv2.NORM_MINMAX)
         heatmap = cv2.applyColorMap(norm.astype(np.uint8), cv2.COLORMAP_JET)
         overlay = cv2.addWeighted(img, 0.55, heatmap, 0.45, 0)
-    else:
+    elif img is not None:
+        gray       = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        median_b   = cv2.medianBlur(gray, 3)
+        noise_diff = cv2.absdiff(gray, median_b)
         noise_norm = cv2.normalize(noise_diff, None, 0, 255, cv2.NORM_MINMAX)
         heatmap    = cv2.applyColorMap(noise_norm.astype(np.uint8), cv2.COLORMAP_JET)
         overlay    = cv2.addWeighted(img, 0.55, heatmap, 0.45, 0)
+    else:
+        # Image opened fine by PIL but not by OpenCV — return without heatmap
+        return {"result": result_label, "confidence": confidence,
+                "reason": reason, "heatmap": None}
 
     _, buf = cv2.imencode('.jpg', overlay)
     heatmap_b64 = base64.b64encode(buf).decode('utf-8')
-
     return {
         "result":     result_label,
         "confidence": confidence,
@@ -225,83 +188,74 @@ def analyze_image(filepath, original_filename=""):
     }
 
 
-# ─── Video Analyser ───────────────────────────────────────────────────────────
+# ─── Video Analyser ──────────────────────────────────────────────────────────
 def analyze_video(filepath, original_filename=""):
+    """
+    Video deepfake detector using frame-level ViT classification.
+    Reuses the Phase 2 image model — no additional download.
+
+    Pipeline:
+      Sample 12 frames uniformly → ViT classifier per frame →
+      Mean AI probability + flagged-frame count → final verdict.
+    """
     cap = cv2.VideoCapture(filepath)
     if not cap.isOpened():
         raise Exception("Invalid video file")
 
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    fps          = cap.get(cv2.CAP_PROP_FPS) or 25
+    total_frames  = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    n_samples     = min(12, max(total_frames, 1))
+    frame_indices = np.linspace(0, max(total_frames - 1, 0), n_samples, dtype=int)
 
-    lap_scores, texture_scores, ch_corr_scores = [], [], []
-    frame_indices = np.linspace(0, max(total_frames - 1, 0), min(15, total_frames), dtype=int)
+    pipe        = get_image_pipe()
+    ai_scores   = []
+    frames_read = 0
 
     for idx in frame_indices:
         cap.set(cv2.CAP_PROP_POS_FRAMES, int(idx))
         ret, frame = cap.read()
         if not ret:
             continue
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        lap_scores.append(cv2.Laplacian(gray, cv2.CV_64F).var())
-        texture_scores.append(compute_texture_score(gray))
-        ch_corr_scores.append(compute_channel_correlation(frame))
+        frames_read += 1
+
+        # Convert BGR → RGB PIL image for the ViT pipeline
+        rgb   = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        pil_f = Image.fromarray(rgb)
+
+        with torch.no_grad():
+            outputs = pipe(pil_f)
+
+        scores   = {o["label"]: o["score"] for o in outputs}
+        ai_score = scores.get("artificial", scores.get("fake", 0.0))
+        ai_scores.append(ai_score)
+
     cap.release()
 
-    if not lap_scores:
+    if not ai_scores:
         raise Exception("Could not extract frames from video")
 
-    avg_lap     = np.mean(lap_scores)
-    std_lap     = np.std(lap_scores)   # Low std → temporally flat → face-swap
-    avg_texture = np.mean(texture_scores)
-    avg_ch_corr = np.mean(ch_corr_scores)
+    mean_ai      = float(np.mean(ai_scores))
+    flagged      = sum(1 for s in ai_scores if s >= 0.5)
+    total        = len(ai_scores)
+    is_fake      = mean_ai >= 0.45 or flagged >= (total * 0.4)
 
-    score    = 0.0
-    evidence = []
+    confidence   = round(mean_ai if is_fake else (1.0 - mean_ai), 3)
+    result_label = "Deepfake" if is_fake else "Real"
 
-    # Temporal consistency (key deepfake tell)
-    if std_lap < 15 and avg_lap > 30:
-        score += 0.30
-        evidence.append(f"Suspiciously uniform inter-frame sharpness (σ={std_lap:.1f}) — face-swap signature")
-    elif std_lap < 40:
-        score += 0.10
-
-    if avg_lap < 50:
-        score += 0.20
-        evidence.append(f"Low frame sharpness (Laplacian avg={avg_lap:.1f}) — over-smooth synthetic frames")
-    elif avg_lap > 2000:
-        score += 0.15
-        evidence.append(f"Extreme edge artifacts (Laplacian avg={avg_lap:.1f}) — rendering artefact detected")
-
-    if avg_texture < 4.0:
-        score += 0.20
-        evidence.append(f"Insufficient sensor noise across frames (texture={avg_texture:.2f})")
+    if is_fake:
+        reason = (
+            f"STATUS: Likely AI-Generated or Manipulated. TECHNICAL DETAILS: "
+            f"ViT frame analysis — {flagged}/{total} frames flagged as synthetic | "
+            f"Mean AI probability {mean_ai:.1%}."
+        )
     else:
-        score -= 0.08
+        reason = (
+            f"STATUS: Likely Authentic Real Media. TECHNICAL DETAILS: "
+            f"ViT frame analysis — {flagged}/{total} frames flagged | "
+            f"Mean Real probability {1.0 - mean_ai:.1%}."
+        )
 
-    if avg_ch_corr > 0.96:
-        score += 0.12
-        evidence.append(f"High inter-channel correlation ({avg_ch_corr:.3f}) — GAN smoothing")
-
-    # Filename trigger
-    fname_lower = original_filename.lower()
-    ai_keywords = ['ai', 'fake', 'deepfake', 'swap', 'generated', 'synthetic',
-                   'sora', 'runway', 'kling', 'faceswap', 'reface']
-    if any(kw in fname_lower for kw in ai_keywords):
-        score += 0.40
-        evidence.append("Metadata: Deepfake pipeline traces found in filename")
-
-    score      = min(max(score, 0.0), 1.0)
-    result_label = "Deepfake" if score >= 0.40 else "Real"
-    confidence   = score if result_label == "Deepfake" else (1.0 - score)
-    confidence   = round(max(confidence, 0.52), 2)
-
-    reason_prefix = (
-        "STATUS: Likely AI-Generated or Manipulated. "
-        if result_label == "Deepfake"
-        else "STATUS: Likely Authentic Real Media. "
-    )
-    reason = reason_prefix + "TECHNICAL DETAILS: " + " | ".join(evidence[:3])
+    logger.info("Video result: %s | confidence: %.3f | flagged: %d/%d",
+                result_label, confidence, flagged, total)
 
     return {
         "result":     result_label,
@@ -310,75 +264,111 @@ def analyze_video(filepath, original_filename=""):
     }
 
 
-# ─── Audio Analyser ───────────────────────────────────────────────────────────
+# ─── Audio Analyser ──────────────────────────────────────────────────────────
 def analyze_audio(filepath, original_filename=""):
+    """
+    Audio authenticity detector using spectral and temporal analysis.
+    Supports WAV and MP3 via torchaudio. Uses librosa for MFCC, spectral
+    flatness, pitch variance, and energy distribution — all well-documented
+    markers for distinguishing TTS/synthetic audio from natural speech.
+    """
     try:
-        if filepath.endswith('.wav'):
-            with wave.open(filepath, 'rb') as wf:
-                framerate = wf.getframerate()
-                nchannels = wf.getnchannels()
-                n_frames  = wf.getnframes()
-                duration  = n_frames / framerate if framerate else 0
+        # Load audio — torchaudio handles WAV and MP3 natively
+        waveform, sample_rate = torchaudio.load(filepath)
 
-                evidence = []
-                score    = 0.0
+        # Resample to 16 kHz mono (standard for speech analysis)
+        if sample_rate != 16000:
+            resampler = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=16000)
+            waveform  = resampler(waveform)
+            sample_rate = 16000
 
-                if framerate not in [16000, 22050, 44100, 48000]:
-                    score += 0.40
-                    evidence.append(f"Non-standard frame rate ({framerate} Hz) — common in TTS synthesis")
+        # Mix down to mono
+        if waveform.shape[0] > 1:
+            waveform = waveform.mean(dim=0, keepdim=True)
 
-                frames = wf.readframes(min(n_frames, framerate * 2))
-                samples = np.frombuffer(frames, dtype=np.int16).astype(np.float32)
+        audio_np = waveform.squeeze().numpy()
 
-                if len(samples) > 0:
-                    rms = np.sqrt(np.mean(samples ** 2))
-                    if rms < 200:
-                        score += 0.20
-                        evidence.append(f"Abnormally low audio energy (RMS={rms:.0f}) — synthetic TTS padding")
+        score    = 0.0
+        evidence = []
 
-                    # Zero-crossing rate
-                    zcr = np.sum(np.diff(np.sign(samples)) != 0) / len(samples)
-                    if zcr > 0.35:
-                        score += 0.15
-                        evidence.append(f"High zero-crossing rate ({zcr:.3f}) — synthetic waveform pattern")
+        # ── 1. MFCC stability — TTS synthesis has unnaturally stable MFCCs ──
+        mfccs    = librosa.feature.mfcc(y=audio_np, sr=sample_rate, n_mfcc=13)
+        mfcc_std = float(np.mean(np.std(mfccs, axis=1)))
+        if mfcc_std < 8.0:
+            score += 0.25
+            evidence.append(f"Unnaturally stable MFCC features (std={mfcc_std:.2f}) — TTS synthesis pattern")
+        elif mfcc_std < 14.0:
+            score += 0.10
+            evidence.append(f"Reduced MFCC variation (std={mfcc_std:.2f})")
 
-                fname_lower = original_filename.lower()
-                ai_keywords = ['ai', 'fake', 'tts', 'generated', 'elevenlabs', 'synthetic', 'deepfake']
-                if any(kw in fname_lower for kw in ai_keywords):
-                    score += 0.40
-                    evidence.append("Metadata: TTS synthesis traces found in filename")
+        # ── 2. Spectral flatness — synthetic noise floor is too uniform ──────
+        flatness = float(np.mean(librosa.feature.spectral_flatness(y=audio_np)))
+        if flatness > 0.05:
+            score += 0.20
+            evidence.append(f"High spectral flatness ({flatness:.4f}) — synthetic noise floor")
+        elif flatness > 0.02:
+            score += 0.08
 
-                score      = min(max(score, 0.0), 1.0)
-                result_label = "Deepfake" if score >= 0.35 else "Real"
-                confidence   = score if result_label == "Deepfake" else (1.0 - score)
-                confidence   = round(max(confidence, 0.52), 2)
+        # ── 3. Pitch variance — TTS prosody is too consistent ─────────────────
+        try:
+            f0, voiced_flag, _ = librosa.pyin(
+                audio_np, fmin=librosa.note_to_hz('C2'),
+                fmax=librosa.note_to_hz('C7')
+            )
+            voiced_f0 = f0[voiced_flag] if voiced_flag is not None else np.array([])
+            if len(voiced_f0) > 20:
+                pitch_std = float(np.std(voiced_f0))
+                if pitch_std < 15.0:
+                    score += 0.20
+                    evidence.append(f"Very low pitch variance (σ={pitch_std:.1f} Hz) — synthesised prosody")
+                elif pitch_std < 30.0:
+                    score += 0.08
+                    evidence.append(f"Reduced pitch variance (σ={pitch_std:.1f} Hz)")
+        except Exception:
+            pass  # pyin can fail on very short or noisy clips — skip gracefully
 
-                reason_prefix = (
-                    "STATUS: Likely AI-Generated or Manipulated. "
-                    if result_label == "Deepfake"
-                    else "STATUS: Likely Authentic Real Media. "
-                )
-                reason = reason_prefix + "TECHNICAL DETAILS: " + " | ".join(evidence or ["No anomalies detected in audio spectrum."])
+        # ── 4. Zero-crossing rate — artificial waveforms spike ZCR ───────────
+        zcr = float(np.mean(librosa.feature.zero_crossing_rate(audio_np)))
+        if zcr > 0.15:
+            score += 0.10
+            evidence.append(f"Elevated zero-crossing rate ({zcr:.3f}) — artificial waveform")
 
-                return {"result": result_label, "confidence": confidence, "reason": reason}
-    except Exception:
-        pass
+        # ── 5. RMS energy distribution — TTS levels energy unnaturally ────────
+        rms     = librosa.feature.rms(y=audio_np)[0]
+        rms_std = float(np.std(rms))
+        if rms_std < 0.005:
+            score += 0.15
+            evidence.append(f"Uniform energy distribution (σ={rms_std:.4f}) — TTS dynamic leveling")
+        elif rms_std < 0.015:
+            score += 0.05
 
-    # MP3 fallback / unknown format
-    fname_lower = original_filename.lower()
-    ai_keywords = ['ai', 'fake', 'tts', 'generated', 'elevenlabs', 'synthetic', 'deepfake']
-    if any(kw in fname_lower for kw in ai_keywords):
+        score        = min(max(score, 0.0), 1.0)
+        result_label = "Deepfake" if score >= 0.40 else "Real"
+        confidence   = round(score if result_label == "Deepfake" else (1.0 - score), 3)
+
+        if result_label == "Deepfake":
+            reason = (
+                "STATUS: Likely AI-Generated or Manipulated. TECHNICAL DETAILS: "
+                + " | ".join(evidence[:3]) + "."
+            )
+        else:
+            reason = (
+                "STATUS: Likely Authentic Real Media. TECHNICAL DETAILS: "
+                "Spectral features consistent with natural speech. "
+                "No significant TTS synthesis markers detected."
+            )
+
+        logger.info("Audio result: %s | confidence: %.3f", result_label, confidence)
+        return {"result": result_label, "confidence": confidence, "reason": reason}
+
+    except Exception as exc:
+        logger.error("Audio analysis error: %s", str(exc))
         return {
-            "result":     "Deepfake",
-            "confidence": 0.83,
-            "reason":     "STATUS: Likely AI-Generated or Manipulated. TECHNICAL DETAILS: Synthetic text-to-speech footprint detected in audio metadata."
+            "result":     "Real",
+            "confidence": 0.55,
+            "reason":     "STATUS: Inconclusive. TECHNICAL DETAILS: Audio decoding failed. Please upload a valid WAV or MP3 file."
         }
 
-    return {
-        "result":     "Real",
-        "confidence": 0.75,
-        "reason":     "STATUS: Likely Authentic Real Media. TECHNICAL DETAILS: Natural frequency domain characteristics. No digital synthesis markers detected."
-    }
 
 
 # ─── Flask Route ─────────────────────────────────────────────────────────────
@@ -393,8 +383,8 @@ def index():
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
-    print("Files:", request.files)
-    print("Form:",  request.form)
+    logger.info("Files: %s", request.files)
+    logger.info("Form: %s", request.form)
 
     if 'file' not in request.files:
         return jsonify({"error": "No file part"}), 400
@@ -432,4 +422,6 @@ def analyze():
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5001))
-    app.run(host='0.0.0.0', port=port, debug=True)
+    # Warm up the image model on startup so the first request is not slow
+    get_image_pipe()
+    app.run(host='0.0.0.0', port=port, debug=False)
