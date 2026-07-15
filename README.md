@@ -33,6 +33,7 @@ DeepThink is an advanced, production-ready full-stack detection system built to 
 - **AI Service**: Python, Flask, OpenCV, NumPy, Hugging Face Transformers
 - **Auth & Database**: Google Firebase (Firestore + Auth)[ FUTURE UPGRADE]
 
+## Current Status
 ## 🚀 Quick Start
 
 Ensure you have Node.js and Python installed.
