@@ -29,8 +29,8 @@ DeepThink is an advanced, production-ready full-stack detection system built to 
 ## ⚙️ Tech Stack
 
 - **Frontend**: React.js, Tailwind CSS, Vite, Framer Motion, HTML2Canvas, jsPDF
-- **Backend**: Node.js, Express, Axios, Firebase Admin
-- **AI Service**: Python, Flask, OpenCV, NumPy
+- **Backend**: Node.js, Express, Axios, Firebase Admin( Future Update)
+- **AI Service**: Python, Flask, OpenCV, NumPy, Hugging Face Transformers
 - **Auth & Database**: Google Firebase (Firestore + Auth)
 
 ## 🚀 Quick Start
