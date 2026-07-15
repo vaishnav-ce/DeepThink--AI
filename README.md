@@ -50,3 +50,8 @@ This is a hosting limitation rather than an application bug.
 - Audio detection
 - Smaller inference model
 - Higher-memory AI deployment
+## Screenshots
+
+<img src="images/screenshot.png" alt="Screenshot" width="500">
+<img src="images/screenshot.png" alt="Screenshot" width="500">
+<img src="images/screenshot.png" alt="Screenshot" width="500">
