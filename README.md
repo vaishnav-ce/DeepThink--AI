@@ -220,7 +220,7 @@ This evaluation workflow was included to move beyond individual demonstrations a
 
 ### 🔍 Detection Analysis
 
-<img src="https://github.com/vaishnav-ce/DeepThink--AI/blob/main/Screenshot%202026-07-15%20230350.png?raw=true" alt="Detection Analysis" width="700">
+<img src="Screenshot 2026-08-01 170731.png" alt="Detection Analysis" width="700">
 
 ### 📊 Forensic Analysis
 
