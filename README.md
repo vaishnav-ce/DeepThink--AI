@@ -224,7 +224,7 @@ This evaluation workflow was included to move beyond individual demonstrations a
 
 ### 📊 Forensic Analysis
 
-<img src="https://github.com/vaishnav-ce/DeepThink--AI/blob/main/Screenshot%202026-07-15%20230420.png?raw=true" alt="Forensic Analysis" width="700">
+<img src="Screenshot 2026-08-01 170850.png" alt="Forensic Analysis" width="700">
 
 ## 🚀 Live Demo
 
