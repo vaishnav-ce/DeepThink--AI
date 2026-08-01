@@ -216,7 +216,7 @@ This evaluation workflow was included to move beyond individual demonstrations a
 
 ### 🖥️ Application Interface
 
-<img src="https://github.com/vaishnav-ce/DeepThink--AI/blob/main/Screenshot%202026-07-15%20230329.png?raw=true" alt="Application Interface" width="700">
+<img src="[https://github.com/vaishnav-ce/DeepThink--AI/blob/main/Screenshot%202026-07-15%20230329.png?raw=true](https://github.com/vaishnav-ce/DeepThink--AI/blob/copilot/deepthink-ai-image-analysis/Screenshot%202026-08-01%20170510.png)" alt="Application Interface" width="700">
 
 ### 🔍 Detection Analysis
 
