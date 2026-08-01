@@ -1,4 +1,5 @@
-const admin = require('firebase-admin');
+const admin = require('firebase-admin'); // Firebase integration is planned for a future update and is not currently connected to the application.
+
 const dotenv = require('dotenv');
 
 dotenv.config();
